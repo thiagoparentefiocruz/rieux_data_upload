@@ -1,5 +1,8 @@
 # rieux_data_upload
 
+[![DOI](https://zenodo.org/badge/1187474279.svg)](https://doi.org/10.5281/zenodo.19139228)
+
+
 Função em Bash (OS-agnostic) para transferência segura de grandes volumes de dados de sequenciamento para o cluster HPC Rieux.
 
 ## Funcionalidades
