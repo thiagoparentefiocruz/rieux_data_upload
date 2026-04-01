@@ -41,7 +41,6 @@ rieux_data_upload() {
     cd "$LOCAL_DIR" || return 1
     rm -f checksums_local.txt
     
-    # CORREÇÃO AQUI: Adicionado ! -name "checksums_local.txt" para ignorar o próprio arquivo
     find . -type f ! -path '*/.*' ! -name "checksums_local.txt" -exec "${CMD_HASH[@]}" {} + > checksums_local.txt
     echo "✅ Checksums locais gerados."
 
@@ -74,4 +73,4 @@ rieux_data_upload() {
     cd "$ORIGINAL_DIR"
 }
 
-export -f rieux_data_upload
+rieux_data_upload "$@"
