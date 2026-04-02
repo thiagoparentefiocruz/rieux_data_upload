@@ -2,7 +2,7 @@
 
 hpc_data_upload() {
     if [ "$#" -ne 2 ]; then
-        echo "Uso: hpc_data_upload </caminho/local_arquivo_ou_pasta> <usuario@hpc:/caminho/remoto_destino>"
+        echo "Usage: hpc_data_upload </path/to/local_file_or_folder> <user@hpc:/path/to/remote_destination>"
         return 1
     fi
 
@@ -12,7 +12,7 @@ hpc_data_upload() {
     local REMOTE_HOST="${REMOTE_DEST%%:*}"
     local REMOTE_DIR="${REMOTE_DEST#*:}"
 
-    echo "🚀 Iniciando pipeline inteligente de upload para o hpc..."
+    echo "🚀 Starting smart HPC upload pipeline..."
 
     local OS_TYPE=$(uname -s)
     local CMD_HASH_GEN=()
@@ -20,17 +20,17 @@ hpc_data_upload() {
 
     case "$OS_TYPE" in
         Darwin*)
-            echo "🍎 Sistema detectado: macOS. Configurando caffeinate e shasum..."
+            echo "🍎 System detected: macOS. Configuring caffeinate and shasum..."
             CMD_HASH_GEN=(shasum -a 256)
             CMD_RSYNC=(caffeinate -i rsync -avP)
             ;;
         Linux*)
-            echo "🐧 Sistema detectado: Linux/WSL. Configurando sha256sum..."
+            echo "🐧 System detected: Linux/WSL. Configuring sha256sum..."
             CMD_HASH_GEN=(sha256sum)
             CMD_RSYNC=(rsync -avP)
             ;;
         *)
-            echo "❌ Sistema Operacional '$OS_TYPE' não suportado."
+            echo "❌ Operating System '$OS_TYPE' not supported."
             return 1
             ;;
     esac
@@ -38,76 +38,76 @@ hpc_data_upload() {
     local ORIGINAL_DIR=$(pwd)
     
     echo "---------------------------------------------------"
-    echo "Preparando o diretório de destino no hpc..."
-    # Garante que a pasta de destino remota exista antes do rsync
+    echo "Preparing the destination directory on the HPC..."
+    # Ensure the remote destination folder exists before rsync
     ssh "$REMOTE_HOST" "mkdir -p '$REMOTE_DIR'"
 
     echo "---------------------------------------------------"
-    echo "Analisando o alvo local e calculando hashes em tempo real..."
+    echo "Analyzing the local target and calculating hashes in real-time..."
     
-    # Verifica se é diretório ou arquivo local
+    # Check if the local target is a directory or a file
     local LOCAL_IS_DIR="NO"
     if [ -d "$LOCAL_SRC" ]; then
         LOCAL_IS_DIR="YES"
     elif [ ! -f "$LOCAL_SRC" ]; then
-        echo "❌ Erro: O arquivo ou pasta local não foi encontrado."
+        echo "❌ Error: The local file or folder was not found."
         return 1
     fi
 
     local RSYNC_SRC=""
 
     if [ "$LOCAL_IS_DIR" = "YES" ]; then
-        # É uma pasta: calcula a hash do conteúdo
+        # It's a folder: calculate the content hash
         cd "$LOCAL_SRC" || return 1
         find . -type f ! -path '*/.*' ! -name "checksums_local.txt" -exec "${CMD_HASH_GEN[@]}" {} + > checksums_local.txt
         RSYNC_SRC="./"
     else
-        # É um arquivo solto: calcula a hash apenas dele
+        # It's a single file: calculate the hash only for it
         cd "$(dirname "$LOCAL_SRC")" || return 1
         "${CMD_HASH_GEN[@]}" "$(basename "$LOCAL_SRC")" > checksums_local.txt
         RSYNC_SRC="$(basename "$LOCAL_SRC")"
     fi
 
-    # Verifica se o arquivo de checksum foi gerado com sucesso
+    # Check if the checksum file was successfully generated
     if [ ! -s checksums_local.txt ]; then
-        echo "❌ Erro: Falha ao gerar as hashes locais ou pasta vazia."
+        echo "❌ Error: Failed to generate local hashes or empty folder."
         rm -f checksums_local.txt
         cd "$ORIGINAL_DIR"
         return 1
     fi
-    echo "✅ Checksums locais mapeados e salvos."
+    echo "✅ Local checksums mapped and saved."
 
     echo "---------------------------------------------------"
-    echo "Iniciando transferência segura (rsync)..."
+    echo "Starting secure transfer (rsync)..."
 
     if [ "$LOCAL_IS_DIR" = "YES" ]; then
-        # Envia o conteúdo da pasta (o checksums_local.txt já está lá dentro e vai junto)
+        # Sends the folder content (checksums_local.txt is already inside and goes with it)
         "${CMD_RSYNC[@]}" "$RSYNC_SRC" "$REMOTE_DEST/"
     else
-        # Envia o arquivo específico e o txt de checksums juntos
+        # Sends the specific file and the checksum txt together
         "${CMD_RSYNC[@]}" "$RSYNC_SRC" checksums_local.txt "$REMOTE_DEST/"
     fi
 
     if [ $? -ne 0 ]; then
-        echo "❌ Erro ou interrupção na transferência."
-        echo "Basta rodar o comando novamente para retomar de onde parou."
+        echo "❌ Error or interruption during transfer."
+        echo "Just run the command again to resume from where it left off."
         cd "$ORIGINAL_DIR"
         return 1
     fi
-    echo "✅ Upload concluído."
+    echo "✅ Upload complete."
 
     echo "---------------------------------------------------"
-    echo "Verificando a integridade dos dados remotamente..."
+    echo "Verifying data integrity remotely..."
     
-    # O HPC lê o arquivo de texto enviado e confere se a transferência foi perfeita
+    # The HPC reads the uploaded text file and checks if the transfer was perfect
     ssh "$REMOTE_HOST" "cd '$REMOTE_DIR' && sha256sum -c checksums_local.txt"
 
     if [ $? -eq 0 ]; then
         echo "---------------------------------------------------"
-        echo "🎉 SUCESSO! Transferência validada criptograficamente no hpc."
+        echo "🎉 SUCCESS! Transfer cryptographically validated on the HPC."
     else
         echo "---------------------------------------------------"
-        echo "⚠️ AVISO: A verificação falhou para um ou mais arquivos. Cheque o log acima."
+        echo "⚠️ WARNING: Verification failed for one or more files. Check the log above."
     fi
 
     cd "$ORIGINAL_DIR"
